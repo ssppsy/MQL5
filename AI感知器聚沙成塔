@@ -1,0 +1,280 @@
+//+------------------------------------------------------------------+
+//|                                                   AI感知器 聚沙成塔.mq5 |
+//|                                         MY 2025, MetaQuotes Ltd. |
+//|                                             https://www.mql5.com |
+//+------------------------------------------------------------------+
+#property copyright "MY 2025, MetaQuotes Ltd."
+#property link      "https://www.mql5.com"
+#property version   "1.00"
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+
+#include <Trade\Trade.mqh>
+CTrade trade;
+
+input group "感知器(Perceptron)相关参数";
+input bool use_perceptron_value = true;  //开关
+input int x1 = 40;                       //感知器输入信号1的权重调节器
+input int x2 = 10;                       //
+input int adx_period_1 = 60;
+input int adx_period_2 = 20;
+input int perceptron_limit = 20;
+
+
+input group "订单和风险参数";
+input int MagicNumber = 666666;
+input string CommentText = "AI感知器聚沙成塔";
+input double SL_Points = 50.0;
+input double Add_Points = 15.0;
+input int MaxSlipage = 2;
+input double MaxSpread_Points = 25.0;
+
+input group "时间过滤器参数"
+input int start_hour = 1;
+input int end_hour = 23;
+
+input group "仓位设置参数"
+input bool use_percent_risk = false;
+input double RiskPercent = 0.5;
+input double Lots = 0.5;
+
+input group "追踪止损参数"
+input int Trail_Points = 50;
+
+enum ENUM_ORDERS_DELETE {
+DELETE_DAY = 86400,
+DELETE_WEEK = 604800,
+DELETE_MON = 2592000
+};
+input ENUM_ORDERS_DELETE DeleteOrdersTime = DELETE_DAY;
+
+enum ENUM_ORDERS_COUNT {
+ORDERS_ONE = 1,
+ORDERS_MULTI = 2
+};
+input ENUM_ORDERS_COUNT OrdersCount = ORDERS_MULTI;
+
+datetime last_bar_time;
+double point_value;
+int digits_value;
+int adx_handle_1;
+int adx_handle_2;
+double adx_buffer_1[];
+double adx_buffer_2[];
+
+int OnInit() {
+   trade.SetExpertMagicNumber(MagicNumber);
+   trade.SetDeviationInPoints(MaxSlipage);
+   
+   digits_value = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
+   point_value = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+   
+   last_bar_time = iTime(_Symbol,PERIOD_H1,0);
+   
+   TesterHideIndicators(true);
+   
+   adx_handle_1 = iADX(_Symbol,PERIOD_H1,adx_period_1);
+   adx_handle_2 = iADX(_Symbol,PERIOD_H1,adx_period_2);
+   
+   if(adx_handle_1 == INVALID_HANDLE || adx_handle_2 == INVALID_HANDLE){
+      Print("创建指标时出现问题，例如参数不合法 ");
+      return(INIT_FAILED);
+   }
+   
+   ArraySetAsSeries(adx_buffer_1,true);
+   ArraySetAsSeries(adx_buffer_2,true);
+   
+   return(INIT_SUCCEEDED);
+}
+
+void OnTick(){
+  //构建并显示仪表盘
+  string dashboard_text = "";
+  
+  dashboard_text += "--- " + CommentText + "---\n";
+  dashboard_text += "------------------------------\n";
+  dashboard_text += "服务器时间: " + TimeToString(TimeCurrent(), TIME_SECONDS) + "\n";
+  dashboard_text += "感知器计算值: " + DoubleToString(CalculatePerception(), 2) + "\n";
+  dashboard_text += "账户余额: " + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE),2) +"\n";
+  dashboard_text += "账户净值: " + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY),2) +"\n";
+  dashboard_text += "持仓数量: " + (string)PositionsTotal() +"\n";
+  dashboard_text += "挂单数量: " + (string)OrdersTotal() +"\n";
+  Comment(dashboard_text);
+  
+  //---核心交易逻辑---
+  //每个Tick都要执行跟踪止损，因为 他需要实时高频地检查当前价格，以便在价格向有利方向移动时及时跟进调整止损位 
+  TrailingStop();
+  
+  //新K线检测
+  datetime current_bar_time = iTime(_Symbol,PERIOD_H1, 0);
+  if(last_bar_time != current_bar_time) {
+    if(IsTradeTime()) {
+      bool allow_trading = false;
+      if(use_perceptron_value) {
+        if(CalculatePerception() <= perceptron_limit) allow_trading = true;
+      }else {
+        allow_trading = true;
+      }
+      if(allow_trading) {
+        PlacePendingOrders();
+      }
+    }
+    last_bar_time = current_bar_time;
+  }
+  
+ 
+}
+
+
+
+bool IsTradeTime() {
+    MqlDateTime dt;
+    TimeCurrent(dt);
+    if(dt.hour >= start_hour && dt.hour <= end_hour) return true;
+    return false;
+}
+
+void DeletePendingOrders() {
+    for(int i = OrdersTotal() - 1; i>=0; i--) {
+       ulong order_ticket = OrderGetTicket(i);
+       if(order_ticket > 0) {
+         if(OrderGetString(ORDER_SYMBOL) == _Symbol && OrderGetInteger(ORDER_MAGIC) == MagicNumber){
+           if(OrdersCount == ORDERS_ONE) {
+             trade.OrderDelete(order_ticket);
+           }else{
+             long time_elapsed = TimeCurrent() - (long)OrderGetInteger(ORDER_TIME_SETUP);
+             if(time_elapsed > (long)DeleteOrdersTime) {
+               trade.OrderDelete(order_ticket);
+             }
+           }
+         }
+       }
+    }
+}
+
+bool CheckSpread() {
+   int current_spread_points = (int)SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);
+   if(current_spread_points <= MaxSpread_Points) {
+     return true;
+   }
+   Print("当前点差过高：", current_spread_points , " > ", MaxSpread_Points);
+   return false;
+}
+
+
+void TrailingStop() {
+   for(int i = PositionsTotal() - 1; i>=0; i--){
+     ulong ticket = PositionGetTicket(i);
+     if(ticket > 0) {
+       if(PositionGetString(POSITION_SYMBOL) == _Symbol && PositionGetInteger(POSITION_MAGIC) == MagicNumber) {
+         double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+         double sl_price = PositionGetDouble(POSITION_SL);
+         double trail_distance = Trail_Points * point_value;
+         
+         if(PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) {
+           double current_bid = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+           if(current_bid - open_price > trail_distance){
+             double new_sl = current_bid - trail_distance;
+             if(sl_price < new_sl || sl_price == 0) {
+               trade.PositionModify(ticket, new_sl, PositionGetDouble(POSITION_TP));
+             }
+           }
+         }else if(PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_SELL) {
+           double current_ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+           if(open_price - current_ask > trail_distance){
+             double new_sl = current_ask +trail_distance;
+             if(sl_price > new_sl || sl_price == 0) {
+               trade.PositionModify(ticket,new_sl,PositionGetDouble(POSITION_TP));
+             }
+           }
+         }
+       }
+     }
+   }
+}
+
+
+//计算仓位
+double CalculateLots() {
+  if(!use_percent_risk){
+    return Lots;
+  }
+  
+  double risk_amount_in_currency = AccountInfoDouble(ACCOUNT_BALANCE) * (RiskPercent / 100.0);
+  double stop_loss_in_points = SL_Points;
+  double tick_value = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+  
+  if(stop_loss_in_points <= 0 || tick_value <= 0) {
+    Print("当前止损或点值数值不正确");
+    return 0.0;
+  }
+  
+  double loss_per_lot = stop_loss_in_points * tick_value;
+  double calculated_lots = risk_amount_in_currency / loss_per_lot;
+  
+  double min_lot = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
+  double max_lot = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MAX);
+  double lot_step = SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
+  
+  calculated_lots = MathFloor(calculated_lots/lot_step) * lot_step;
+  
+  if(calculated_lots < min_lot) calculated_lots = min_lot;
+  if(calculated_lots > max_lot) calculated_lots = max_lot;
+  
+  return calculated_lots;
+}
+
+//挂单函数
+void PlacePendingOrders() {
+  DeletePendingOrders();
+  
+  if(!CheckSpread()) return;
+  
+  double lots_to_trade= CalculateLots();
+  if(lots_to_trade <= 0) {
+    Print("计算的手数小于或等于0, 不能挂单");
+    return;
+  }
+  
+  double prev_high = iHigh(_Symbol,PERIOD_H1,1);
+  double prev_low = iLow(_Symbol,PERIOD_H1,1);
+  
+  double add_pips_in_price = Add_Points * point_value;
+  double sl_in_price = SL_Points * point_value;
+  
+  
+  double buy_stop_price = NormalizeDouble(prev_high + add_pips_in_price, digits_value);
+  double sell_stop_price = NormalizeDouble(prev_low - add_pips_in_price, digits_value);
+  
+  double buy_sl_price = NormalizeDouble(buy_stop_price - sl_in_price, digits_value);
+  double sell_sl_price = NormalizeDouble(sell_stop_price + sl_in_price, digits_value);
+  
+  datetime expiration = (datetime)(TimeCurrent()+(long)DeleteOrdersTime);
+  
+  trade.BuyStop(lots_to_trade, buy_stop_price, _Symbol, buy_sl_price,0, ORDER_TIME_SPECIFIED,expiration,CommentText);
+  trade.SellStop(lots_to_trade,sell_stop_price,_Symbol, sell_sl_price,0,ORDER_TIME_SPECIFIED,expiration,CommentText);
+}
+
+
+//获取两个ADX的值作为指标的输入
+double CalculatePerception() {
+  if(CopyBuffer(adx_handle_1,0,0,2,adx_buffer_1) < 2 || CopyBuffer(adx_handle_2,0,0,2,adx_buffer_2) <2 ){
+    Print("ADX指标值获取失败异常: ", GetLastError());
+    return(999);
+  }
+  
+  double adx_val_1 = adx_buffer_1[1];
+  double adx_val_2 = adx_buffer_2[1];
+  
+  double W1 = (double)x1 - 100.0;
+  double W2 = (double)x2 - 100.0;
+  
+  double R1 = (adx_val_1 / 100.0) - 0.5;
+  double R2 = (adx_val_2 / 100.0) - 0.5;
+  
+  double value = (W1*R1)+(W2*R2);
+  
+  return(value);
+}
+
