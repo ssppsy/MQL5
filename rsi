@@ -88,8 +88,38 @@ void OnTick(){
   debugInfo[8] = "--------------------------------------------";
   
  
-  DisplayDebugInfo(debugInfo);
+  //是否显示调试信息
+  if(inpDisplayDebugInfoScreen) {
+    DisplayDebugInfo(debugInfo);
+  }
 
+  //检查当前时间是否允许交易
+  if(!IsTradeAllowed() || IsTradeTimeAllowed()) {
+    Print("当前时间不允许交易,EA将暂停操作。");
+    return;
+  }
+
+}
+
+//禁止在某些时间段内交易
+bool IsTradeTimeAllowed() {
+  datetime currentTime = TimeCurrent();
+  MqlDateTime currentDateTime;
+  TimeToStruct(currentTime, currentDateTime);
+  bool hoursToAvoid[24] = {
+    Hour_00, Hour_01, Hour_02, Hour_03, Hour_04, Hour_05,
+    Hour_06, Hour_07, Hour_08, Hour_09, Hour_10, Hour_11,
+    Hour_12, Hour_13, Hour_14, Hour_15, Hour_16, Hour_17,
+    Hour_18, Hour_19, Hour_20, Hour_21, Hour_22, Hour_23
+  };
+
+  //检查当前时间是否允许交易
+  if(hoursToAvoid[currentDateTime.hour]) {
+    Print("当前时间不允许交易: ", currentDateTime.hour);
+    return true;
+  } 
+
+  return false;
 }
 
 //检查当前时间是否允许交易
