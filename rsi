@@ -108,6 +108,73 @@ void OnTick(){
 
 }
 
+//是否存在多单持仓
+bool IsBuyPositionExists() {
+  int totalPositions = PositionsTotal();
+  for(int i = totalPositions - 1; i >= 0; i--) {
+    ulong positionTicket = PositionGetTicket(i);
+    if(positionTicket <= 0) {
+      PrintFormat("错误:获取持仓票据失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+
+    if(!PositionSelectByTicket(positionTicket)) {
+      PrintFormat("错误:选择持仓失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+
+    long magic; if(!PositionGetInteger(POSITION_MAGIC, magic)) {
+      PrintFormat("错误:获取持仓魔术号失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+
+    if(magic == MagicNumber){
+      long type; if(!PositionGetInteger(POSITION_TYPE, type)) {
+        PrintFormat("错误:获取持仓类型失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+        return false;
+      }
+      if(type == POSITION_TYPE_BUY) {
+        Print("存在多单持仓,EA将暂停操作。");
+        return true; // 存在多单持仓
+      }
+    }
+
+    return false;
+  }
+}
+
+//是否存在空单持仓
+bool IsSellPositionExists() {
+  int totalPositions = PositionsTotal();
+  for(int i = totalPositions - 1; i >= 0; i--) {
+    ulong positionTicket = PositionGetTicket(i);
+    if(positionTicket <= 0) {
+      PrintFormat("错误:获取持仓票据失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+    if(!PositionSelectByTicket(positionTicket)) {
+      PrintFormat("错误:选择持仓失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+    long magic; if(!PositionGetInteger(POSITION_MAGIC, magic)) {
+      PrintFormat("错误:获取持仓魔术号失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return false;
+    }
+    if(magic == MagicNumber){
+      long type; if(!PositionGetInteger(POSITION_TYPE, type)) {
+        PrintFormat("错误:获取持仓类型失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+        return false;
+      }
+      if(type == POSITION_TYPE_SELL) {
+        Print("存在空单持仓,EA将暂停操作。");
+        return true; // 存在空单持仓
+      }
+    }
+
+    return false;
+  }
+}
+
 //检查手数是否符合要求
 double LotCheck(double lots) {
   double volume = NormalizeDouble(lots, 2);
