@@ -123,7 +123,38 @@ void OnTick(){
     //开空单
     OpenSell(Lot);
   }
+}
 
+//当上一笔交易亏损时，开一个反向单
+bool OpenReversePosition() {
+  ENUM_DEAL_TYPE closedDealType;
+  double lastNegativeDealProfit;
+  double lastNegativeDealLot;
+  isLastPositionNegative(_Symbol, closedDealType, lastNegativeDealProfit, lastNegativeDealLot);
+
+  double Lot;
+
+  if(lastNegativeDealProfit < 0) {
+    double newLot = lastNegativeDealLot * MartingaleMultiplier;
+    if(!IsPositionWithSameVolumeOpen(newLot)) {
+      Lot = LotCheck(newLot);
+      if(Lot == 0.0){
+        Print(__FILE__, ":", __FUNCTION__, " - 错误:手数不符合要求, EA将暂停操作。");
+        return false;
+      }
+      OpenBuy(Lot); // 开多单
+      return true;
+    } else if(closedDealType == DEAL_TYPE_SELL) {
+      Lot = LotCheck(lastNegativeDealLot);
+      if(Lot == 0.0){
+        Print(__FILE__, ":", __FUNCTION__, " - 错误:手数不符合要求, EA将暂停操作。");
+        return false;
+      }
+      OpenSell(Lot); // 开空单
+      return true;
+    }
+  }
+  return false; // 没有满足开反向单的条件  
 }
 
 //检查最后一笔交易是否为负
