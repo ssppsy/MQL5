@@ -84,11 +84,27 @@ void OnTick(){
   debugInfo[0] = "当前RSI: " + DoubleToString(rsi_Buffer[0],2);
   debugInfo[1] = "做多信号:" + (CheckBuyCondition() ? "True" : "False");
   debugInfo[2] = "做空信号:" + (CheckSellCondition() ? "True" : "False");
+  debugInfo[3] = "当前时间是否允许交易: " + (IsTradeAllowed() ? "True" : "False");
   debugInfo[8] = "--------------------------------------------";
   
  
   DisplayDebugInfo(debugInfo);
 
+}
+
+//检查当前时间是否允许交易
+bool IsTradeAllowed() {
+  datetime currentTime = TimeCurrent();
+  MqlDateTime currentDateTime;
+  TimeToStruct(currentTime, currentDateTime);
+  int currentHour = currentDateTime.hour;
+  //检查当前时间是否在允许交易的时间段内
+  if ((currentHour >= StartTime && currentHour <= EndTime){
+    return true;
+  }
+
+  Print("当前时间不允许交易: ", currentHour);
+  return false;
 }
 
 //做多信号
