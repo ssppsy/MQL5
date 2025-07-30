@@ -99,6 +99,34 @@ void OnTick(){
     return;
   }
 
+  //检查手数
+  double Lot = LotCheck(InitialLot);
+  if(Lot <= 0) {
+    Print("错误:手数不符合要求,EA将暂停操作。");
+    return;
+  }
+
+}
+
+//检查手数是否符合要求
+double LotCheck(double lots) {
+  double volume = NormalizeDouble(lots, 2);
+  double stepvol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+  if(stepvol > 0.0) {
+    volume = stepvol * MathFloor(volume / stepvol);
+  }
+
+  double minvol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+  if(volume < minvol) {
+    Print("错误：手数小于最小手数，调整为最小手数: ", minvol);
+  }
+
+  double maxvol = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+  if(volume > maxvol) {
+    volume = maxvol;
+  }
+
+  return volume;
 }
 
 //禁止在某些时间段内交易
