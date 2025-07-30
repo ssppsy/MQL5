@@ -82,11 +82,66 @@ void OnTick(){
   //调试信息
   string debugInfo[9];
   debugInfo[0] = "当前RSI: " + DoubleToString(rsi_Buffer[0],2);
+  debugInfo[1] = "做多信号:" + (CheckBuyCondition() ? "True" : "False");
+  debugInfo[2] = "做空信号:" + (CheckSellCondition() ? "True" : "False");
   debugInfo[8] = "--------------------------------------------";
   
  
   DisplayDebugInfo(debugInfo);
 
+}
+
+//做多信号
+bool CheckBuyCondition(){
+  bool isMinRSI = IsMinRSIForBars();
+  if(isMinRSI){
+    return true;
+  }
+
+  return false;
+}
+
+
+//做空信号
+bool CheckSellCondition(){
+  bool isMaxRSI = IsMaxRSIForBars();
+  if(isMaxRSI){
+    return true;
+  }
+
+  return false;
+}
+
+//检查是否满足做多条件:最近几根k线的最小rsi
+bool IsMinRSIForBars(){
+   double current_rsi = rsi_Buffer[0];
+   bool isMinRSI = true;
+
+   for(int i = 1; i < BarsForCondition; i++){
+    if(current_rsi > rsi_Buffer[i]){
+        isMinRSI = false;
+        break;
+    }
+  }
+
+
+  return isMinRSI;
+}
+
+
+//检查是否满足做空条件:最近几根k线的最大rsi
+bool IsMaxRSIForBars(){
+   double current_rsi = rsi_Buffer[0];
+   bool isMaxRSI = true;
+
+   for(int i = 1; i < BarsForCondition; i++){
+    if(current_rsi < rsi_Buffer[i]){
+        isMaxRSI = false;
+        break;
+    }
+  }
+
+  return isMaxRSI;
 }
   
 //从指标缓冲区中获取数据并存储到动态数组 arr_buffer中
