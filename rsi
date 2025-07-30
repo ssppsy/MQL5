@@ -85,6 +85,13 @@ void OnTick(){
   debugInfo[1] = "做多信号:" + (CheckBuyCondition() ? "True" : "False");
   debugInfo[2] = "做空信号:" + (CheckSellCondition() ? "True" : "False");
   debugInfo[3] = "当前时间是否允许交易: " + (IsTradeAllowed() ? "True" : "False");
+  //获取最后一笔交易的信息
+  ENUM_DEAL_TYPE closedDealType;
+  double lastNegativeDealProfit;
+  double lastNegativeDealLot;
+  isLastPositionNegative(_Symbol, closedDealType, lastNegativeDealProfit, lastNegativeDealLot);
+  debugInfo[4] = "最后一笔交易类型: " + EnumToString(closedDealType) + ", 利润: " + DoubleToString(lastNegativeDealProfit, 2) + ", 手数: " + DoubleToString(lastNegativeDealLot, 2);
+
   debugInfo[8] = "--------------------------------------------";
   
  
@@ -117,6 +124,32 @@ void OnTick(){
     OpenSell(Lot);
   }
 
+}
+
+//检查最后一笔交易是否为负
+bool isLastPositionNegative(string symbol, ENUM_DEAL_TYPE & closedDealType, double &lastNegativeDealProfit, double &lastNegativeDealLot) {
+  datetime from_date = TimeCurrent() - 60 * 60 * 24; // 获取过去24小时的交易
+  datetime to_date = TimeCurrent() + 60 * 60 * 24; // 获取未来24小时的交易
+  HistorySelect(from_date, to_date);
+
+  int total_deals = HistoryDealsTotal();
+  ulong ticket_history_deal = 0;
+
+  for(int i = total_deals - 1; i >= 0; i--) {
+    if((ticket_history_deal = HistoryDealGetTicket(i)) > 0) {
+      if(m_deal.SelectByIndex(i)){
+        if(m_deal.Symbol() == symbol && m_deal.Magic() == MagicNumber && m_deal.Entry() == DEAL_ENTRY_OUT) {
+          lastNegativeDealProfit = m_deal.Profit();
+          closedDealType = m_deal.DealType();
+          Print("最后一笔交易类型: ", closedDealType, ", 利润: ", lastNegativeDealProfit);
+          lastNegativeDealLot = m_deal.Volume();
+
+          return true;
+        }
+      }
+    }
+ }
+ return false; // 没有找到符合条件的交易
 }
 
 //开多单
