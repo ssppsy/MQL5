@@ -106,6 +106,81 @@ void OnTick(){
     return;
   }
 
+  //rsi是最近几根k的最小值而且当前没有多单持仓
+  if(CheckBuyCondition() && !IsBuyPositionExists() && currentRSI < (100 - RSILevel)) {
+    //开多单
+    OpenBuy(Lot);
+  }
+  //rsi是最近几根k的最大值而且当前没有空单持仓
+  if(CheckSellCondition() && !IsSellPositionExists() && currentRSI > RSILevel) {
+    //开空单
+    OpenSell(Lot);
+  }
+
+}
+
+//开多单
+void OpenBuy(double lot) {
+  double ask;
+  long spread;
+
+  if(!SymbolInfoDouble(_Symbol, SYMBOL_ASK, ask) || !SymbolInfoInteger(_Symbol, SYMBOL_SPREAD, spread)) {
+    Print("获取当前品种信息失败");
+    return;
+  }
+
+  if(MaxSpread > 0 && spread > MaxSpread) {
+    PrintFormat("错误:当前点差超过最大允许点差, EA: %s, 方法: %s, 错误代码: %d", __FILE__, __FUNCTION__, __LINE__);
+    return;
+  }
+
+  //设置止损和止盈
+  double takeProfitPrice = 0.0;
+  double stopLossPrice = 0.0;
+  if(TakeProfit > 0) {
+    takeProfitPrice = NormalizeDouble(ask + TakeProfit * _Point, _Digits);
+  }
+  if(StopLoss > 0) {
+    stopLossPrice = NormalizeDouble(ask - StopLoss * _Point, _Digits);
+}
+
+  if(trade.Buy(lot, _Symbol, 0, 0, takeProfitPrice, stopLossPrice)) {
+    Print("开多单成功，手数: ", lot);
+  } else {
+    Print("开多单失败，错误代码: ", GetLastError());
+  }
+}
+
+//开空单
+void OpenSell(double lot) {
+  double bid;
+  long spread;
+
+  if(!SymbolInfoDouble(_Symbol, SYMBOL_BID, bid) || !SymbolInfoInteger(_Symbol, SYMBOL_SPREAD, spread)) {
+    Print("获取当前品种信息失败");
+    return;
+  }
+
+  if(MaxSpread > 0 && spread > MaxSpread) {
+    PrintFormat("错误:当前点差超过最大允许点差, EA: %s, 方法: %s, 错误代码: %d", __FILE__, __FUNCTION__, __LINE__);
+    return;
+  }
+
+  //设置止损和止盈
+  double takeProfitPrice = 0.0;
+  double stopLossPrice = 0.0;
+  if(TakeProfit > 0) {
+    takeProfitPrice = NormalizeDouble(bid - TakeProfit * _Point, _Digits);
+  }
+  if(StopLoss > 0) {
+    stopLossPrice = NormalizeDouble(bid + StopLoss * _Point, _Digits);
+  }
+
+  if(trade.Sell(lot, _Symbol, 0, 0, takeProfitPrice, stopLossPrice)) {
+    Print("开空单成功，手数: ", lot);
+  } else {
+    Print("开空单失败，错误代码: ", GetLastError());
+  }
 }
 
 //是否存在多单持仓
