@@ -1,0 +1,143 @@
+#include <Trade\Trade.mqh>
+#include <Trade\PositionInfo.mqh>
+#include <Indicators\Indicator.mqh>
+#include <Trade\DealInfo.mqh>
+#include <Trade\SymbolInfo.mqh>
+
+CDealInfo m_deal;
+CTrade trade;
+CPositionInfo m_position;
+CSymbolInfo m_symbol;
+
+input group "基本参数";
+input int MagicNumber = 123456; // EA的魔术号
+input double InitialLot = 0.01; // 初始化手数
+input int MaxSpread = 10; // 最大允许点差
+input int MaxSlippage = 3; // 最大滑点
+
+input group "参数优化";
+input int Rsi_Period = 14; // RSI周期
+input int RSILevel = 80; // RSI上沿值
+input int BarsForCondition = 20; // 比较n根K线的RSI
+input int TakeProfit = 300; // 止盈点数
+input int StopLoss = 100; // 止损点数
+input double MartingaleMultiplier = 2.0; // 反向时增加n倍手数
+
+input group "时间过滤器";
+input int StartTime = 1; // 开始交易时间小时
+input int EndTime = 23; // 结束交易时间小时
+input bool Hour_00 = false; // 暂停交易时间段：00:00 - 00:59
+input bool Hour_01 = false; // 暂停交易时间段：01:00 - 01:59
+input bool Hour_02 = false; // 暂停交易时间段：02:00 - 02:59
+input bool Hour_03 = false; // 暂停交易时间段：03:00 - 03:59
+input bool Hour_04 = false; // 暂停交易时间段：04:00 - 04:59
+input bool Hour_05 = false; // 暂停交易时间段：05:00 - 05:59
+input bool Hour_06 = false; // 暂停交易时间段：06:00 - 06:59
+input bool Hour_07 = false; // 暂停交易时间段：07:00 - 07:59
+input bool Hour_08 = false; // 暂停交易时间段：08:00 - 08:59
+input bool Hour_09 = false; // 暂停交易时间段：09:00 - 09:59
+input bool Hour_10 = false; // 暂停交易时间段：10:00 - 10:59
+input bool Hour_11 = false; // 暂停交易时间段：11:00 - 11:59
+input bool Hour_12 = false; // 暂停交易时间段：12:00 - 12:59
+input bool Hour_13 = false; // 暂停交易时间段：13:00 - 13:59
+input bool Hour_14 = false; // 暂停交易时间段：14:00 - 14:59
+input bool Hour_15 = false; // 暂停交易时间段：15:00 - 15:59
+input bool Hour_16 = false; // 暂停交易时间段：16:00 - 16:59
+input bool Hour_17 = false; // 暂停交易时间段：17:00 - 17:59
+input bool Hour_18 = false; // 暂停交易时间段：18:00 - 18:59
+input bool Hour_19 = false; // 暂停交易时间段：19:00 - 19:59
+input bool Hour_20 = false; // 暂停交易时间段：20:00 - 20:59
+input bool Hour_21 = false; // 暂停交易时间段：21:00 - 21:59
+input bool Hour_22 = false; // 暂停交易时间段：22:00 - 22:59
+input bool Hour_23 = false; // 暂停交易时间段：23:00 - 23:59
+
+input group "其他参数";
+input bool inpDisplayDebugInfoScreen = true; // 是否显示调试信息
+input color inpDisplayDebugInfoColor = clrBlack; // 调试信息颜色
+
+int rsi_handle; // RSI指标句柄
+double rsi_Buffer[]; // RSI缓冲区
+
+int OnInit(){
+   if(StartTime >= EndTime) {
+        Print("错误：开始时间或结束时间设置不正确。");
+        return(INIT_PARAMETERS_INCORRECT);
+    }
+    //创建rsi指标句柄
+   rsi_handle = iRSI(_Symbol, 0, Rsi_Period, PRICE_CLOSE);
+   
+   //数组设为时序上的倒序
+   ArraySetAsSeries(rsi_Buffer, true);
+   trade.SetExpertMagicNumber(MagicNumber);
+   return(INIT_SUCCEEDED);
+}
+void OnDeinit(const int reason)
+  {
+  }
+  
+void OnTick(){
+    //从指标缓冲区获取数据并存储到动态数组中
+  iGetArray(rsi_handle, 0, 0, BarsForCondition+1, rsi_Buffer);
+
+  //调试信息
+  string debugInfo[9];
+  debugInfo[0] = "当前RSI: " + DoubleToString(rsi_Buffer[0],2);
+  debugInfo[8] = "--------------------------------------------";
+  
+ 
+  DisplayDebugInfo(debugInfo);
+
+}
+  
+//从指标缓冲区中获取数据并存储到动态数组 arr_buffer中
+//const常量参数，函数内部不可修改
+bool iGetArray(const int handle, const int buffer,const int start_por,const int count, double &arr_buffer[]){
+   bool result = true;
+
+   //检查数组是否为动态数组
+   if(!ArrayIsDynamic(arr_buffer)){
+      Print("错误：传入的数组不是动态数组。");
+      return false;
+   }
+
+   //释放数组内存
+   ArrayFree(arr_buffer);
+
+   //重置错误代码
+    ResetLastError();
+   //从指标缓冲区复制一部分数据到数组中
+   int copied = CopyBuffer(handle, buffer, start_por, count, arr_buffer);
+   if(copied != count){
+      //如果复制的数据量不等于请求的数量，打印错误信息
+      int error_code = GetLastError();
+      Print("错误：CopyBuffer() 失败，错误代码：", error_code);
+      result = false;
+   } else {
+      Print("成功从指标缓冲区复制数据，复制数量：", copied);
+}
+
+  return result;
+
+}
+
+void DisplayDebugInfo(string &debugLine[], int startLine = 0) {
+  int lineCount = ArraySize(debugLine);
+
+  //删除上一次生成的信息
+  for(int i = 0; i < lineCount; i++) {
+    string oldLabelName = "DebugInfo_" + IntegerToString(i + startLine);
+    ObjectDelete(0, oldLabelName);
+  }
+
+  for(int i = 0; i < lineCount; i++) {
+    string labelName = "DebugInfo_" + IntegerToString(i + startLine);
+    //创建新的标签对象
+    if(ObjectCreate(0, labelName, OBJ_LABEL, 0, 0, 0)) {
+       ObjectSetString(0, labelName, OBJPROP_TEXT, debugLine[i]);
+       ObjectSetInteger(0, labelName, OBJPROP_XDISTANCE, 50);
+       ObjectSetInteger(0, labelName, OBJPROP_YDISTANCE, 50 + (startLine+i) * 20);
+       ObjectSetInteger(0, labelName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+       ObjectSetInteger(0, labelName, OBJPROP_COLOR, inpDisplayDebugInfoColor);
+    }
+  }
+}
