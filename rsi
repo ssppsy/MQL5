@@ -157,6 +157,18 @@ bool OpenReversePosition() {
   return false; // 没有满足开反向单的条件  
 }
 
+//检查是否存在相同手数的持仓
+bool IsPositionWithSameVolumeOpen(double lot) {
+  for(int i = 0, i < PositionsTotal(); i++) {
+    if(positionInfo.SelectByIndex(i)) {
+      if(StringFind(positionInfo.Symbol(), _Symbol) != -1 && positionInfo.Magic() == MagicNumber && positionInfo.Volume() == lot) {
+        Print("存在相同手数的持仓");
+        return true; // 存在相同手数的持仓
+      }
+  }
+  return false; // 没有找到相同手数的持仓
+}
+
 //检查最后一笔交易是否为负
 bool isLastPositionNegative(string symbol, ENUM_DEAL_TYPE & closedDealType, double &lastNegativeDealProfit, double &lastNegativeDealLot) {
   datetime from_date = TimeCurrent() - 60 * 60 * 24; // 获取过去24小时的交易
