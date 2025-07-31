@@ -123,6 +123,15 @@ void OnTick(){
     //开空单
     OpenSell(Lot);
   }
+
+  //出场
+  if(lastNegativeDealProfit == 0 || lastNegativeDealProfit > 0) {
+    if(currentRSI > RSILevel ) {
+      CloseBuy(currentRSI); // 平多仓
+    } else if(currentRSI < (100 - RSILevel)) {
+      CloseSell(currentRSI); // 平空仓
+    }
+  }
 }
 
 //当上一笔交易亏损时，开一个反向单
