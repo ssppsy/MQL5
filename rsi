@@ -488,3 +488,80 @@ void DisplayDebugInfo(string &debugLine[], int startLine = 0) {
     }
   }
 }
+
+
+//平多仓
+void CloseBuy(double currentRSI){
+  int totalPositions = PositionsTotal();
+  for(int i = totalPositions - 1; i >= 0; i--) {
+    ulong positionTicket = PositionGetTicket(i);
+    if(positionTicket <= 0) {
+      PrintFormat("错误:获取持仓票据失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    if(!PositionSelectByTicket(positionTicket)) {
+      PrintFormat("错误:选择持仓失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    long magic; 
+    if(!PositionGetInteger(POSITION_MAGIC, magic)) {
+      PrintFormat("错误:获取持仓魔术号失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    if(magic == MagicNumber){
+      long type; 
+      if(!PositionGetInteger(POSITION_TYPE, type)) {
+        PrintFormat("错误:获取持仓类型失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+        return;
+      }
+      if(type == POSITION_TYPE_SELL) {
+        continue;
+      }
+      trade.PositionClose(positionTicket);
+      if(trade.ResultRetcode() != TRADE_RETCODE_DONE) {
+        PrintFormat("平多仓失败, EA: %s, 方法: %s, 错误代码: %d", __FILE__, __FUNCTION__, __LINE__);
+        return; 
+      }
+
+      Print("平多仓成功" + _Symbol + "RSI: " + DoubleToString(currentRSI, 2) + ", 手数: " + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2));
+    }
+  }
+}
+
+//平空仓
+void CloseSell(double currentRSI){
+  int totalPositions = PositionsTotal();
+  for(int i = totalPositions - 1; i >= 0; i--) {
+    ulong positionTicket = PositionGetTicket(i);
+    if(positionTicket <= 0) {
+      PrintFormat("错误:获取持仓票据失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    if(!PositionSelectByTicket(positionTicket)) {
+      PrintFormat("错误:选择持仓失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    long magic; 
+    if(!PositionGetInteger(POSITION_MAGIC, magic)) {
+      PrintFormat("错误:获取持仓魔术号失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+      return;
+    }
+    if(magic == MagicNumber){
+      long type; 
+      if(!PositionGetInteger(POSITION_TYPE, type)) {
+        PrintFormat("错误:获取持仓类型失败, EA: %s, 方法: %s, 错误代码: %d",__FILE__, __FUNCTION__, __LINE__);
+        return;
+      }
+      if(type == POSITION_TYPE_SELL) {
+        continue;
+      }
+      trade.PositionClose(positionTicket);
+      if(trade.ResultRetcode() != TRADE_RETCODE_DONE) {
+        PrintFormat("平空仓失败, EA: %s, 方法: %s, 错误代码: %d", __FILE__, __FUNCTION__, GetLastError());
+        return; 
+      }
+
+      Print("平空仓成功" + _Symbol + "RSI: " + DoubleToString(currentRSI, 2) + ", 手数: " + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2));
+    }
+  }
+}
