@@ -3,11 +3,13 @@
 #include <Indicators\Indicator.mqh>
 #include <Trade\DealInfo.mqh>
 #include <Trade\SymbolInfo.mqh>
+#include <Thread\OrderInfo.mqh>
 
 CDealInfo dealInfo;
 CTrade trade;
 CPositionInfo positionInfo;
 CSymbolInfo symbolInfo;
+COrderInfo orderInfo;
 
 input group "基本参数";
 input int MagicNumber = 000002;
@@ -112,10 +114,23 @@ void OnTick(){
         //突破单价格
         double orderHighPrice = getHighPrice(); // 获取当前时间周期的最高价
         orderHighPrice = NormalizeDouble(orderHighPrice + 3 * _Point, _Digits); // 调整价格，避免滑点
+        //是否产生新信号的突破单
+        ulong buyOrderTid = 0;
+        for(int i = OrdersTotal() - 1; i >= 0; i--){
+            if(orderInfo.SelectByIndex(i)){
+                if(orderInfo.Magic() == MagicNumber && orderInfo.OrderType() == ORDER_TYPE_BUY_STOP && orderInfo.PriceOpen() != orderHighPrice){
+                    trade.OrderDelete(orderInfo.Ticket());
+                    break;
+                }
+                buyOrderTid = orderInfo.Ticket();
+            }
+        }
 
-        //止盈
-        double takeProfitPrice = orderHighPrice + (orderHighPrice - lowPrice) * tpCount; // 止盈价格
-        trade.BuyStop(0.1, orderHighPrice, _Symbol, lowPrice - 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+        if(buyOrderTid == 0) {
+            //止盈
+            double takeProfitPrice = orderHighPrice + (orderHighPrice - lowPrice) * tpCount; // 止盈价格
+            trade.BuyStop(0.1, orderHighPrice, _Symbol, lowPrice - 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+        }
     }
 
     //接触均线，产生空单信号
@@ -127,9 +142,23 @@ void OnTick(){
         double orderLowPrice = getLowPrice(); // 获取当前时间周期的最低价
         orderLowPrice = NormalizeDouble(orderLowPrice - 3 * _Point, _Digits); // 调整价格，避免滑点
 
-        //止盈
-        double takeProfitPrice = orderLowPrice - (highPrice - orderLowPrice) * tpCount; // 止盈价格
-        trade.SellStop(0.1, orderLowPrice, _Symbol, highPrice + 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+        //是否产生新信号的突破单
+        ulong sellOrderTid = 0;
+        for(int i = OrdersTotal() - 1; i >= 0; i--){
+            if(orderInfo.SelectByIndex(i)){
+                if(orderInfo.Magic() == MagicNumber && orderInfo.OrderType() == ORDER_TYPE_SELL_STOP && orderInfo.PriceOpen() != orderLowPrice){
+                    trade.OrderDelete(orderInfo.Ticket());
+                    break;
+                }
+                sellOrderTid = orderInfo.Ticket();
+            }
+        }
+
+        if(sellOrderTid == 0) {
+            //止盈
+            double takeProfitPrice = orderLowPrice - (highPrice - orderLowPrice) * tpCount; // 止盈价格
+            trade.SellStop(0.1, orderLowPrice, _Symbol, highPrice + 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+        }
     }
 }
 
