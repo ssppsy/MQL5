@@ -1,0 +1,56 @@
+#include <Trade\Trade.mqh>
+#include <Trade\PositionInfo.mqh>
+#include <Indicators\Indicator.mqh>
+#include <Trade\DealInfo.mqh>
+#include <Trade\SymbolInfo.mqh>
+
+CDealInfo dealInfo;
+CTrade trade;
+CPositionInfo positionInfo;
+CSymbolInfo symbolInfo;
+
+input group "基本参数";
+input int MagicNumber = 000002;
+
+input group "时间参数";
+input ENUM_TIMEFRAMES Current_Timeframe = PERIOD_M5; // 当前图表时间周期
+input ENUM_TIMEFRAMES Trend_Ma_Timeframe = PERIOD_H1; // 大趋势时间周期
+input int Trend_fastMa_Period = 8; // 大趋势快线周期
+input int Trend_slowMa_Period = 21;
+
+input group "其他参数";
+input bool inpDisplayDebugInfoScreen = true; // 是否显示调试信息
+input color inpDisplayDebugInfoColor = clrRed; // 调试信息颜色
+
+int trendFastMaHandle; // 大趋势快线指标句柄
+double trendFastMaBuffer[]; // 大趋势快线指标缓冲区
+int trendSlowMaHandle; // 大趋势慢线指标句柄
+double trendSlowMaBuffer[]; // 大趋势慢线指标缓冲区
+
+int OnInit(){
+    // 创建大趋势快线和慢线指标句柄
+    trendFastMaHandle = iMA(_Symbol, Trend_Ma_Timeframe, Trend_fastMa_Period, 0, MODE_EMA, PRICE_CLOSE);
+    trendSlowMaHandle = iMA(_Symbol, Trend_Ma_Timeframe, Trend_slowMa_Period, 0, MODE_EMA, PRICE_CLOSE);
+    // 设置缓冲区
+    ArraySetAsSeries(trendFastMaBuffer, true);
+    ArraySetAsSeries(trendSlowMaBuffer, true);
+
+    trade.SetExpertMagicNumber(MagicNumber); // 设置交易魔术号
+
+    return(INIT_SUCCEEDED);
+}
+
+
+void OnTick(){
+    //每根Bar的openPrice执行一次
+    int bars = iBars(_Symbol, Current_Timeframe);
+    static int prevBars = 0;
+    if(bars == prevBars) {
+        return; // 如果没有新的Bar，则不执行
+    }
+    prevBars = bars;
+
+    // 获取指标值
+    CopyBuffer(trendFastMaHandle, 0, 0, 1, trendFastMaBuffer);
+    CopyBuffer(trendSlowMaHandle, 0, 0, 1, trendSlowMaBuffer);
+}
