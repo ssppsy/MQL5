@@ -14,6 +14,10 @@ input int MagicNumber = 000002;
 
 input group "时间参数";
 input ENUM_TIMEFRAMES Current_Timeframe = PERIOD_M5; // 当前图表时间周期
+input int Current_fastMa_Period = 8; // 小趋势快线周期
+input int Current_middleMa_Period = 13; // 小趋势中线周期
+input int Current_slowMa_Period = 21; // 小趋势慢线周期
+
 input ENUM_TIMEFRAMES Trend_Ma_Timeframe = PERIOD_H1; // 大趋势时间周期
 input int Trend_fastMa_Period = 8; // 大趋势快线周期
 input int Trend_slowMa_Period = 21;
@@ -27,13 +31,26 @@ double trendFastMaBuffer[]; // 大趋势快线指标缓冲区
 int trendSlowMaHandle; // 大趋势慢线指标句柄
 double trendSlowMaBuffer[]; // 大趋势慢线指标缓冲区
 
+int currentFastMaHandle; // 小趋势快线指标句柄
+double currentFastMaBuffer[]; // 小趋势快线指标缓冲区
+int currentMiddleMaHandle; // 小趋势中线指标句柄
+double currentMiddleMaBuffer[]; // 小趋势中线指标缓冲区
+int currentSlowMaHandle; // 小趋势慢线指标句柄
+double currentSlowMaBuffer[]; // 小趋势慢线指标缓冲区
+
 int OnInit(){
     // 创建大趋势快线和慢线指标句柄
     trendFastMaHandle = iMA(_Symbol, Trend_Ma_Timeframe, Trend_fastMa_Period, 0, MODE_EMA, PRICE_CLOSE);
     trendSlowMaHandle = iMA(_Symbol, Trend_Ma_Timeframe, Trend_slowMa_Period, 0, MODE_EMA, PRICE_CLOSE);
+    currentFastMaHandle = iMA(_Symbol, Current_Timeframe, Current_fastMa_Period, 0, MODE_EMA, PRICE_CLOSE);
+    currentMiddleMaHandle = iMA(_Symbol, Current_Timeframe, Current_middleMa_Period, 0, MODE_EMA, PRICE_CLOSE);
+    currentSlowMaHandle = iMA(_Symbol, Current_Timeframe, Current_slowMa_Period, 0, MODE_EMA, PRICE_CLOSE);
     // 设置缓冲区
     ArraySetAsSeries(trendFastMaBuffer, true);
     ArraySetAsSeries(trendSlowMaBuffer, true);
+    ArraySetAsSeries(currentFastMaBuffer, true);
+    ArraySetAsSeries(currentMiddleMaBuffer, true);
+    ArraySetAsSeries(currentSlowMaBuffer, true);
 
     trade.SetExpertMagicNumber(MagicNumber); // 设置交易魔术号
 
@@ -51,10 +68,14 @@ void OnTick(){
     prevBars = bars;
 
     // 获取指标值
-    CopyBuffer(trendFastMaHandle, 0, 0, 1, trendFastMaBuffer);
-    CopyBuffer(trendSlowMaHandle, 0, 0, 1, trendSlowMaBuffer);
+    CopyBuffer(trendFastMaHandle, 0, 0, 2, trendFastMaBuffer);
+    CopyBuffer(trendSlowMaHandle, 0, 0, 2, trendSlowMaBuffer);
+    CopyBuffer(currentFastMaHandle, 0, 0, 2, currentFastMaBuffer);
+    CopyBuffer(currentMiddleMaHandle, 0, 0, 2, currentMiddleMaBuffer);
+    CopyBuffer(currentSlowMaHandle, 0, 0, 2, currentSlowMaBuffer);
 
-    int trendDirection = GetTrendDirection(); // 获取趋势方向
+    int trendDirection = GetTrendDirection(); // 获取大级别趋势方向
+    int currentDirection = GetCurrentDirection(); // 获取小级别趋势方向
 
     // 显示调试信息
     string debugInfo[9];
@@ -69,7 +90,19 @@ void OnTick(){
     }
 }
 
-//定义得到趋势信息的方法
+//定义得到小级别趋势信息的方法
+int GetCurrentDirection() {
+    int result = 0; // 默认无趋势
+    double closePrice = iClose(_Symbol, Current_Timeframe, 0); // 获取当前收盘价
+    if (currentFastMaBuffer[1] > currentMiddleMaBuffer[1] && currentMiddleMaBuffer[1] > currentSlowMaBuffer[1]) {
+        result = 1; // 上升趋势
+    } else if (currentFastMaBuffer[1] < currentMiddleMaBuffer[1] && currentMiddleMaBuffer[1] < currentSlowMaBuffer[1]) {
+        result = -1; // 下降趋势
+    }
+    return result;
+}
+
+//定义得到大级别趋势信息的方法
 int GetTrendDirection() {
     int result = 0; // 默认无趋势
     double closePrice = iClose(_Symbol, Trend_Ma_Timeframe, 0); // 获取当前收盘价
