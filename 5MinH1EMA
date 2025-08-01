@@ -53,4 +53,52 @@ void OnTick(){
     // 获取指标值
     CopyBuffer(trendFastMaHandle, 0, 0, 1, trendFastMaBuffer);
     CopyBuffer(trendSlowMaHandle, 0, 0, 1, trendSlowMaBuffer);
+
+    int trendDirection = GetTrendDirection(); // 获取趋势方向
+
+    // 显示调试信息
+    string debugInfo[9];
+    debugInfo[0] = "大趋势快线: " + (string)trendFastMaBuffer[1];
+    debugInfo[1] = "大趋势慢线: " + (string)trendSlowMaBuffer[1];
+    debugInfo[2] = "当前趋势方向: " + (string)(trendDirection == 1 ? "上升" : (trendDirection == -1 ? "下降" : "无趋势"));
+
+
+    // 是否显示调试信息
+    if(inpDisplayDebugInfoScreen) {
+        DisplayDebugInfoScreen(debugInfo);
+    }
+}
+
+//定义得到趋势信息的方法
+int GetTrendDirection() {
+    int result = 0; // 默认无趋势
+    double closePrice = iClose(_Symbol, Trend_Ma_Timeframe, 0); // 获取当前收盘价
+    if (trendFastMaBuffer[1] > trendSlowMaBuffer[1] && closePrice > trendSlowMaBuffer[1]) {
+        result = 1; // 上升趋势
+    } else if (trendFastMaBuffer[1] < trendSlowMaBuffer[1] && closePrice < trendSlowMaBuffer[1]) {
+        result = -1; // 下降趋势
+    }
+    return result;
+}
+
+void DisplayDebugInfoScreen(string &debugInfo[], int startLine = 0) {
+    int lineCount = ArraySize(debugInfo);
+
+    //删除之前的调试信息
+    for(int i = 0; i < lineCount; i++) {
+        string oldLabelName = "DebugInfo_" + IntegerToString(startLine + i);
+        ObjectDelete(0, oldLabelName);
+    }
+
+    // 显示新的调试信息
+    for(int i = 0; i < lineCount; i++) {
+        string labelName = "DebugInfo_" + IntegerToString(startLine + i);
+        if(ObjectCreate(0, labelName, OBJ_LABEL, 0, 0, 0)) {
+            ObjectSetInteger(0, labelName, OBJPROP_TEXT, debugInfo[i]);
+            ObjectSetInteger(0, labelName, OBJPROP_XDISTANCE, 50);
+            ObjectSetInteger(0, labelName, OBJPROP_YDISTANCE, 50 + (startLine + i)* 20);
+            ObjectSetInteger(0, labelName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+            ObjectSetInteger(0, labelName, OBJPROP_COLOR, inpDisplayDebugInfoColor);
+        }
+    }
 }
