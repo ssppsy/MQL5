@@ -76,13 +76,19 @@ void OnTick(){
 
     int trendDirection = GetTrendDirection(); // 获取大级别趋势方向
     int currentDirection = GetCurrentDirection(); // 获取小级别趋势方向
+    int finalDirection = trendDirection == 1 && currentDirection == 1 ? 1 : trendDirection == -1 && currentDirection == -1 ? -1 : 0; // 确定最终交易方向
 
     // 显示调试信息
     string debugInfo[9];
     debugInfo[0] = "大趋势快线: " + (string)trendFastMaBuffer[1];
     debugInfo[1] = "大趋势慢线: " + (string)trendSlowMaBuffer[1];
-    debugInfo[2] = "当前趋势方向: " + (string)(trendDirection == 1 ? "上升" : (trendDirection == -1 ? "下降" : "无趋势"));
-
+    debugInfo[2] = "当前大趋势方向: " + (string)(trendDirection == 1 ? "上升" : (trendDirection == -1 ? "下降" : "无趋势"));
+    debugInfo[3] = "小趋势快线: " + (string)currentFastMaBuffer[1];
+    debugInfo[4] = "小趋势中线: " + (string)currentMiddleMaBuffer[1];
+    debugInfo[5] = "小趋势慢线: " + (string)currentSlowMaBuffer[1];
+    debugInfo[6] = "当前小趋势方向: " + (string)(currentDirection == 1 ? "上升" : (currentDirection == -1 ? "下降" : "无趋势"));
+    debugInfo[7] = "最终交易方向: " + (string)(finalDirection == 1 ? "上升" : (finalDirection == -1 ? "下降" : "无趋势"));
+    debugInfo[8] = '----------------------------------------------------------------------------------------';
 
     // 是否显示调试信息
     if(inpDisplayDebugInfoScreen) {
