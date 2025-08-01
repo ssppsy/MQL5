@@ -94,6 +94,54 @@ void OnTick(){
     if(inpDisplayDebugInfoScreen) {
         DisplayDebugInfoScreen(debugInfo);
     }
+
+    double closePrice = iClose(_Symbol, Current_Timeframe, 0); // 获取当前收盘价
+    doule highPrice = iHigh(_Symbol, Current_Timeframe, 0); // 获取当前最高价
+    double lowPrice = iLow(_Symbol, Current_Timeframe, 0); // 获取当前最低价
+
+    //接触均线，产生多单信号
+    double touchLowEMA = lowPrice < currentFastMaBuffer[1] && closePrice > currentSlowMaBuffer[1];
+    if(finalDirection == 1 && touchLowEMA){
+        Print("挂突破单, Buy");
+
+        //突破单价格
+        double orderHighPrice = getHighPrice(); // 获取当前时间周期的最高价
+        orderHighPrice = NormalizeDouble(orderHighPrice + 3 * _Point, _Digits); // 调整价格，避免滑点
+
+        //止盈
+        double takeProfitPrice = orderHighPrice + (orderHighPrice - lowPrice) * tpCount; // 止盈价格
+        trade.BuyStop(0.1, orderHighPrice, _Symbol, lowPrice - 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+    }
+
+    //接触均线，产生空单信号
+    double touchHighEMA = highPrice > currentFastMaBuffer[1] && closePrice < currentSlowMaBuffer[1];
+    if(finalDirection == -1 && touchHighEMA){
+        Print("挂突破单, Sell");
+
+        //突破单价格
+        double orderLowPrice = getLowPrice(); // 获取当前时间周期的最低价
+        orderLowPrice = NormalizeDouble(orderLowPrice - 3 * _Point, _Digits); // 调整价格，避免滑点
+
+        //止盈
+        double takeProfitPrice = orderLowPrice - (highPrice - orderLowPrice) * tpCount; // 止盈价格
+        trade.SellStop(0.1, orderLowPrice, _Symbol, highPrice + 3 * _Point, takeProfitPrice, ORDER_TIME_GTC, 0, "突破单");
+    }
+}
+
+double getHighPrice() {
+    int val_index = iHighest(_Symbol, Current_Timeframe,MODE_HIGH,BarCount,1); // 获取当前时间周期的最高价索引
+    if(val_index != -1){
+        return iHigh(_Symbol, Current_Timeframe, val_index); // 返回最高价
+    }
+    return 0.0; // 如果没有找到最高价，返回0
+}
+
+double getLowPrice() {
+    int val_index = iLowest(_Symbol, Current_Timeframe,MODE_LOW,BarCount,1); // 获取当前时间周期的最低价索引
+    if(val_index != -1){
+        return iLow(_Symbol, Current_Timeframe, val_index); // 返回最低价
+    }
+    return 0.0; // 如果没有找到最低价，返回0
 }
 
 //定义得到小级别趋势信息的方法
