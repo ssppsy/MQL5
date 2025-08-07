@@ -1,0 +1,290 @@
+#include <Trade/Trade.mqh>
+CTrade trade;
+
+
+input group "基本参数";
+input int MagicNumber = 000000000; // EA的魔术数
+sinput int SlType = 1; // 止损类型：0-无止损，1-固定止损，2-动态止损
+sinput double SlParam = 100.0; // 止损参数
+
+input group "基本参数";
+input ENUM_TIMEFRAMES TradeTF = PERIOD_H1; // 交易时间框架
+input double TPFactor = 1.5; // 止盈倍数
+input bool ReverseSignal = false; // 反向信号开仓
+
+input group "均线参数";
+input ENUM_TIMEFRAMES MATF = PERIOD_H1; // 均线周期
+input int MAPeriod = 200;  // 均线周期
+
+input group "SuperTrend参数";
+input ENUM_TIMEFRAMES SPTF = PERIOD_H1; // SuperTrend周期
+input int SP1Period = 12; // SuperTrend1周期
+input doubule SP1Multiplier = 3.0; // SuperTrend1乘数
+input int SP2Period = 11; // SuperTrend2周期
+input double SP2Multiplier = 2.0; // SuperTrend2乘数
+input int SP3Period = 10; // SuperTrend3周期
+input double SP3Multiplier = 1.0; // SuperTrend3乘数
+
+input group "Stoch RSI参数";
+input ENUM_TIMEFRAMES SRSITF = PERIOD_H1; // Stoch RSI
+input int SRSIKPeriod = 3; // K
+input int SRSIDPeriod = 3; // D
+input int SRSIPeriod = 14; // RSI周期
+input int SRSIStochastikPeriod = 14; // Stochastik周期
+input double SRSIOB = 80.0; // 超买水平
+input double SRSIOS = 20.0; // 超卖水平
+
+input group "出场方式";
+input bool ExitByTradeSignal = false; // 根据交易信号出场
+input bool ExitBySRSI = false; // 根据Stoch RSI出场
+input bool ExitByMA = false; // 根据均线出场
+
+int handleMA;
+int handleSP1;
+int handleSP2;
+int handleSP3;
+int handleSRSI;
+
+double bufferMA[];
+double bufferSP1[];
+double bufferSP2[];
+double bufferSP3[];
+double bufferSRSIK[];
+double bufferSRSID[];
+
+int barsTotal;
+
+
+int OnInit() {
+
+    if(TPFactor == 0 && ExitByTradeSignal && !ExitBySRSI && !ExitByMA) {
+        Alter("止盈倍数不能为0,且至少需要一个出场方式。");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+
+    handleMA = iMA(_Symbol, MATF, MAPeriod, 0, MODE_SMA, PRICE_CLOSE);
+    if(handleMA == INVALID_HANDLE) {
+        Alter((string)MagicNumber +" "+_Symbol + "均线指标加载失败");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+    ArraySetAsSeries(bufferMA, true);
+
+    handleSP1 = iCustom(_Symbol, SPTF, "SuperTrend", SP1Period, SP1Multiplier);
+    if(handleSP1 == INVALID_HANDLE) {
+        Alter((string)MagicNumber +" "+_Symbol + "SuperTrend1指标加载失败");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+    ArraySetAsSeries(bufferSP1, true);
+
+    handleSP2 = iCustom(_Symbol, SPTF, "SuperTrend", SP2Period, SP2Multiplier);
+    if(handleSP2 == INVALID_HANDLE) {
+        Alter((string)MagicNumber +" "+_Symbol + "SuperTrend2指标加载失败");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+    ArraySetAsSeries(bufferSP2, true);
+
+    handleSP3 = iCustom(_Symbol, SPTF, "SuperTrend", SP3Period, SP3Multiplier);
+    if(handleSP3 == INVALID_HANDLE) {
+        Alter((string)MagicNumber +" "+_Symbol + "SuperTrend3指标加载失败");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+    ArraySetAsSeries(bufferSP3, true);
+
+    handleSRSI = iCustom(_Symbol, SRSITF, "StochRSI", SRSIKPeriod, SRSIDPeriod, SRSIPeriod, SRSIStochastikPeriod);
+    if(handleSRSI == INVALID_HANDLE) {
+        Alter((string)MagicNumber +" "+_Symbol + "StochRSI指标加载失败");
+        return INIT_PARAMETERS_INCORRECT;
+    }
+    ArraySetAsSeries(bufferSRSIK, true);
+    ArraySetAsSeries(bufferSRSID, true);
+    
+    ChartIndicatorAdd(0, 0, handleMA);
+    ChartIndicatorAdd(0, 0, handleSP1);
+    ChartIndicatorAdd(0, 0, handleSP2);
+    ChartIndicatorAdd(0, 0, handleSP3);
+    ChartIndicatorAdd(0, 1, handleSRSI);
+
+    return INIT_SUCCEEDED;
+}
+
+void OnTick() {
+    if(!isNewBar(_Symbol, TradeTF, barsTotal)) {
+        return;
+    }
+
+    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+
+    CopyBuffer(handleMA, 0, 0, 2, bufferMA);
+    CopyBuffer(handleSP1, 0, 0, 2, bufferSP1);
+    CopyBuffer(handleSP2, 0, 0, 2, bufferSP2);
+    CopyBuffer(handleSP3, 0, 0, 2, bufferSP3);
+    CopyBuffer(handleSRSI, 0, 0, 3, bufferSRSIK);
+    CopyBuffer(handleSRSI, 1, 0, 3, bufferSRSID);
+
+    //统计开仓的买入和卖出订单数量
+    int countBuy = 0, countSell = 0;
+    if(!countOpenPositions(MagicNumber, countBuy, countSell)) {
+        return;
+    }
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double middleValue = getMiddleValue(bufferSP1[1], bufferSP2[1], bufferSP3[1]);
+
+    bool SRSICrossOver = bufferSRSIK[1] < SRSIOS && bufferSRSIK[2] <= bufferSRSID[2] && bufferSRSIK[1] > bufferSRSID[1];
+    bool SRSICrossUnder = bufferSRSIK[1] > SRSIOB && bufferSRSIK[2] >= bufferSRSID[2] && bufferSRSIK[1] < bufferSRSID[1];
+
+    bool BuySignal, SellSignal;
+    if(ReverseSignal) {
+        BuySignal = cntBuy == 0 && bid > bufferMA[1] && bid > middleValue && SRSICrossUnder;
+        SellSignal = cntSell == 0 && ask < bufferMA[1] && ask < middleValue && SRSICrossOver;
+    }else{
+        BuySignal = cntBuy == 0 && bid > bufferMA[1] && bid > middleValue && SRSICrossOver;
+        SellSignal = cntSell == 0 && ask < bufferMA[1] && ask < middleValue && SRSICrossUnder;
+    }
+
+    if(BuySignal){
+        setFlag("三重超级趋势-BUY",1,1,TradeTF);
+        double s1 = getSecondBufferBelowCurrentPrice(bid, bufferSP1[1], bufferSP2[1], bufferSP3[1]);
+        s1 = NormalizeDouble(s1, digits);
+
+        orderSend(_Symbol, MagicNumber, ask, s1, SlType, SlParam, TPFactor, (string)MagicNumber);
+    }
+    if(SellSignal){
+        setFlag("三重超级趋势-SELL",0,1,TradeTF);
+        double s1 = getSecondBufferAboveCurrentPrice(ask, bufferSP1[1], bufferSP2[1], bufferSP3[1]);
+        s1 = NormalizeDouble(s1, digits);
+
+        orderSend(_Symbol, MagicNumber, bid, s1, SlType, SlParam, TPFactor, (string)MagicNumber);
+    }
+
+}
+
+bool isNewBar(string symbol, ENUM_TIMEFRAMES timeframe, int &bTotal) {
+    int bars = iBars(symbol, timeframe);
+    if(bTotal == bars) {
+        return false;
+    }
+    bTotal = bars;
+    return true;
+}
+
+bool countOpenPositions(long magnum, int& countBuy, int& countSell){
+    countBuy = 0;
+    countSell = 0;
+
+    int total = PositionsTotal();
+    for(int i = total -1; i >= 0; i--) {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket <= 0) {
+            return false;
+        }
+        if(!PositionSelectByTicket(tick)) {
+            Print("选择持仓失败");
+            return false;
+        }
+        long magic;
+        if(!PositionGetInteger(POSITION_MAGIC, magic)) {
+            Print("获取持仓魔术数失败");
+            return false;
+        }
+        if(magic == magnum) {
+            long type;
+            if(!PositionGetInteger(POSITION_TYPE, type)) {
+                Print("获取持仓类型失败");
+                return false;
+            }
+            if(type == POSITION_TYPE_BUY) {
+                countBuy++;
+            } else if(type == POSITION_TYPE_SELL) {
+                countSell++;
+            }
+        }
+    }
+    return true;
+}
+
+double getMiddleValue(double val1, double val2, double val3) {
+    if((val1 >= val2 && val1 <= val3) || (val1 >= val3 && val1 <= val2)) {
+        return val1;
+    } else if((val2 >= val1 && val2 <= val3) || (val2 >= val3 && val2 <= val1)) {
+        return val2;
+    } else {
+        return val3;
+    }
+}
+
+void setFlag(string prename, int flag, int barIndex, ENUM_TIMEFRAMES tf) {
+    string name = prename + string(MathRand());
+
+    if(flag == 1) {
+        double priceOffet = iHigh(_Symbol, tf, barIndex) * 0.0001;
+        ObjectCreate(0, name, OBJ_ARROW, 0, iTime(_Symbol, tf, barIndex), iHigh(_Symbol, tf, barIndex) + priceOffet);
+        ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 159);
+        ObjectSetInteger(0, name, OBJPROP_COLOR, clrBlue);
+        ObjectSetInteger(0, name, OBJPROP_WIDTH, 5);
+        ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_UPPER);
+    }else{
+        double priceOffet = iLow(_Symbol, tf, barIndex) * 0.0001;
+        ObjectCreate(0, name, OBJ_ARROW, 0, iTime(_Symbol, tf, barIndex), iLow(_Symbol, tf, barIndex) - priceOffet);
+        ObjectSetInteger(0, name, OBJPROP_ARROWCODE, 159);
+        ObjectSetInteger(0, name, OBJPROP_COLOR, clrRed);
+        ObjectSetInteger(0, name, OBJPROP_WIDTH, 5);
+    }
+}
+
+double getSecondBufferBelowCurrentPrice(double currentPrice, double buf1, double buf2, double buf3) {
+    double arr[] = {currentPrice, buf1, buf2, buf3};
+    ArraySort(arr);
+
+    int index = ArrayBsearch(arr, currentPrice);
+    int targetIndex = index - 2;
+
+    if(targetIndex < 0) {
+        targetIndex = 0;
+    }
+
+    return arr[targetIndex];
+}
+
+double getSecondBufferAboveCurrentPrice(double currentPrice, double buf1, double buf2, double buf3) {
+    double arr[] = {currentPrice, buf1, buf2, buf3};
+    ArraySort(arr);
+
+    int index = ArrayBsearch(arr, currentPrice);
+    int targetIndex = index + 2;
+
+    if(targetIndex >= ArraySize(arr)) {
+        targetIndex = ArraySize(arr) - 1;
+    }
+
+    return arr[targetIndex];
+}
+
+
+void orderSend(string symbol, long magic, double price, double sl, int slType, double slParam, double tpFactor, string comment, bool isBuy) 
+{
+    double stopLoss=0, takeProfit=0;
+
+    if(isBuy)
+    {
+        if(slType==1) stopLoss = price - slParam*_Point;
+        else if(slType==2) stopLoss = sl;  // 动态止损传入
+        takeProfit = price + tpFactor*slParam*_Point;
+
+        trade.SetExpertMagicNumber(magic);
+        trade.SetDeviationInPoints(30);  // 可调滑点
+        if(!trade.Buy(0.1, symbol, price, stopLoss, takeProfit, comment))
+            Print("买单失败: ", GetLastError());
+    }
+    else
+    {
+        if(slType==1) stopLoss = price + slParam*_Point;
+        else if(slType==2) stopLoss = sl;
+        takeProfit = price - tpFactor*slParam*_Point;
+
+        trade.SetExpertMagicNumber(magic);
+        trade.SetDeviationInPoints(30);
+        if(!trade.Sell(0.1, symbol, price, stopLoss, takeProfit, comment))
+            Print("卖单失败: ", GetLastError());
+    }
+}
